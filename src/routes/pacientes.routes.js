@@ -38,7 +38,7 @@ router
     .get(verificarToken, checkPermisos('pacientes', 'ver'), getCargos);
 
 router
-    .route('all_profesion')
+    .route('/all_profesion')
     .get(verificarToken, checkPermisos('pacientes', 'ver'), getProfesiones);
 
 router

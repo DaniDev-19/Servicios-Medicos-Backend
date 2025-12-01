@@ -27,7 +27,7 @@ const medicamentos = require('./routes/medicamentos.routes');
 const historiasMedicas = require('./routes/historias_medicas.routes');
 const signos = require('./routes/signos_vitales.routes');
 const reposos = require('./routes/reposos.routes');
-const seguimientos = require('./routes/seguimiento.routes');
+const seguimientos = require('./routes/seguimientos.routes');
 const consultas = require('./routes/consulta.routes');
 const login = require('./routes/auth.routes');
 const recuperacion = require('./routes/recuperacion.routes');
@@ -53,16 +53,22 @@ app.use(express.json());
 app.use(cors(corsOptions));
 app.use(morgan('dev'));
 
+// Logger manual para depuración extrema
+app.use((req, res, next) => {
+    console.log(`[DEBUG] Petición entrante: ${req.method} ${req.url}`);
+    next();
+});
+
 ////////////////////////// 
 
 // -----Socket.io ------
 const server = http.createServer(app);
-    const io = new Server(server, {
+const io = new Server(server, {
     cors: {
         origin: (origin, cb) => {
-        if (!origin) return cb(null, true);
-        if (allowed.includes(origin)) return cb(null, true);
-        return cb(new Error(`CORS WS no permitido: ${origin}`));
+            if (!origin) return cb(null, true);
+            if (allowed.includes(origin)) return cb(null, true);
+            return cb(new Error(`CORS WS no permitido: ${origin}`));
         },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
@@ -97,7 +103,7 @@ app.use('/recuperacion', recuperacion);
 app.use('/auth', login);
 app.use('/consultas', consultas);
 app.use('/seguimientos', seguimientos);
-app.use('/reposos', reposos);
+app.use('/reposos', reposos); 
 app.use('/signos_vitales', signos);
 app.use('/historias_medicas', historiasMedicas);
 app.use('/medicamentos', medicamentos);

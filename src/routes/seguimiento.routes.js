@@ -1,13 +1,24 @@
 const { Router } = require('express');
 const verificarToken = require('../helpers/verificarToken');
 const checkPermisos = require('../helpers/checkPermisos');
-const { getAllSeguimientos, createSeguimiento, getSeguimiento, updateSeguimiento, deleteSeguimiento } = require('../controllers/seguimiento.controller');
+const {
+    getAllSeguimientos,
+    getSeguimientosByPaciente,
+    createSeguimiento,
+    getSeguimiento,
+    updateSeguimiento,
+    deleteSeguimiento
+} = require('../controllers/seguimientos.controller');
 
 const router = Router();
 
 router
     .route('/')
     .get(verificarToken, checkPermisos('seguimiento', 'ver'), getAllSeguimientos);
+
+router
+    .route('/paciente/:id')
+    .get(verificarToken, checkPermisos('seguimiento', 'ver'), getSeguimientosByPaciente);
 
 router
     .route('/registrar')
@@ -24,5 +35,5 @@ router
 router
     .route('/eliminar/:id')
     .delete(verificarToken, checkPermisos('seguimiento', 'eliminar'), deleteSeguimiento);
-    
+
 module.exports = router;

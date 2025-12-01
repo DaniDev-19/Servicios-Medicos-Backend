@@ -32,6 +32,7 @@ const createReposo = async (req, res, next) => {
         const {
             fecha_inicio,
             fecha_fin,
+            hora_fin,
             diagnostico,
             observacion,
             consulta_id,
@@ -41,10 +42,10 @@ const createReposo = async (req, res, next) => {
 
         const result = await pool.query(
             `INSERT INTO reposos (
-                fecha_inicio, fecha_fin, diagnostico, observacion,
+                fecha_inicio, fecha_fin, hora_fin, diagnostico, observacion,
                 consulta_id, pacientes_id, usuarios_id
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
-            [fecha_inicio, fecha_fin, diagnostico, observacion, consulta_id, pacientes_id, usuarios_id]
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
+            [fecha_inicio, fecha_fin, hora_fin, diagnostico, observacion, consulta_id, pacientes_id, usuarios_id]
         );
 
         await registrarBitacora({
@@ -58,8 +59,12 @@ const createReposo = async (req, res, next) => {
 
         return res.status(201).json(result.rows[0]);
     } catch (error) {
-        console.error('Error creando reposo', error);
-        next();
+        console.error('Error creando reposo:', error);
+        // Devolver error 500 explícito para ver qué pasó
+        return res.status(500).json({
+            message: 'Error al crear el reposo en base de datos',
+            error: error.message
+        });
     }
 };
 
@@ -70,6 +75,7 @@ const updateReposo = async (req, res, next) => {
         const {
             fecha_inicio,
             fecha_fin,
+            hora_fin,
             diagnostico,
             observacion,
             estado,
@@ -84,14 +90,15 @@ const updateReposo = async (req, res, next) => {
             `UPDATE reposos SET
                 fecha_inicio = $1,
                 fecha_fin = $2,
-                diagnostico = $3,
-                observacion = $4,
-                estado = $5,
-                consulta_id = $6,
-                pacientes_id = $7,
-                usuarios_id = $8
-            WHERE id = $9 RETURNING *`,
-            [fecha_inicio, fecha_fin, diagnostico, observacion, estado, consulta_id, pacientes_id, usuarios_id, id]
+                hora_fin = $3,
+                diagnostico = $4,
+                observacion = $5,
+                estado = $6,
+                consulta_id = $7,
+                pacientes_id = $8,
+                usuarios_id = $9
+            WHERE id = $10 RETURNING *`,
+            [fecha_inicio, fecha_fin, hora_fin, diagnostico, observacion, estado, consulta_id, pacientes_id, usuarios_id, id]
         );
 
         if (result.rows.length === 0) {
@@ -151,9 +158,33 @@ const actualizarEstadosReposos = async () => {
     }
 };
 
+const getRepososByPaciente = async (req, res, next) => {
+    const { id } = req.params;
+    try {
+        // Ordenar: primero activos, luego por fecha más reciente
+        const result = await pool.query(
+            `SELECT * FROM reposos 
+             WHERE pacientes_id = $1 
+             ORDER BY 
+                CASE 
+                    WHEN estado = 'activo' THEN 1 
+                    WHEN estado = 'finalizado' THEN 2 
+                    ELSE 3 
+                END,
+                fecha_inicio DESC`,
+            [id]
+        );
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(`Error obteniendo reposos del paciente ${id}`, error);
+        next();
+    }
+};
+
 module.exports = {
     getAllReposos,
     getReposo,
+    getRepososByPaciente,
     createReposo,
     updateReposo,
     deleteReposo,

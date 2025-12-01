@@ -4,9 +4,12 @@ const { registrarBitacora } = require('../helpers/registerBitacora');
 const getAllPacientes = async (req, res, next) => {
     try {
         const result = await pool.query(`
-            SELECT * FROM pacientes 
-            WHERE estado = TRUE 
-            ORDER BY id DESC
+            SELECT p.*, 
+                   CASE WHEN COUNT(c.id) > 0 THEN true ELSE false END as has_consultas
+            FROM pacientes p
+            LEFT JOIN consultas c ON p.id = c.pacientes_id
+            GROUP BY p.id
+            ORDER BY p.id DESC
         `);
         return res.json(result.rows);
     } catch (error) {
@@ -19,7 +22,9 @@ const getPacientes = async (req, res, next) => {
     const { id } = req.params;
     try {
         const result = await pool.query(
-            'SELECT * FROM pacientes WHERE id = $1 AND estado = TRUE',
+            `SELECT p.*, TO_CHAR(p.fecha_nacimiento, 'YYYY-MM-DD') AS fecha_nacimiento 
+            FROM pacientes p 
+            WHERE id = $1 `,
             [id]
         );
 
@@ -40,7 +45,7 @@ const createPaciente = async (req, res, next) => {
             cedula, nombre, apellido, sexo, fecha_nacimiento, edad,
             correo, contacto, ubicacion,
             estado_id, municipio_id, parroquia_id, sector_id,
-            departamentos_id, cargos_id, profesion_id
+            departamentos_id, cargos_id, profesion_id, estatus
         } = req.body;
 
         const existe = await pool.query('SELECT * FROM pacientes WHERE cedula = $1', [cedula]);
@@ -53,20 +58,20 @@ const createPaciente = async (req, res, next) => {
                 cedula, nombre, apellido, sexo, fecha_nacimiento, edad,
                 correo, contacto, ubicacion,
                 estado_id, municipio_id, parroquia_id, sector_id,
-                departamentos_id, cargos_id, profesion_id, estado
+                departamentos_id, cargos_id, profesion_id, estatus
             )
             VALUES (
                 $1, $2, $3, $4, $5, $6,
                 $7, $8, $9,
                 $10, $11, $12, $13,
-                $14, $15, $16, TRUE
+                $14, $15, $16, $17
             )
             RETURNING *`,
             [
                 cedula, nombre, apellido, sexo, fecha_nacimiento, edad,
                 correo, contacto, ubicacion,
                 estado_id, municipio_id, parroquia_id, sector_id,
-                departamentos_id, cargos_id, profesion_id
+                departamentos_id, cargos_id, profesion_id, estatus
             ]
         );
 
@@ -95,7 +100,7 @@ const updatePaciente = async (req, res, next) => {
             cedula, nombre, apellido, sexo, fecha_nacimiento, edad,
             correo, contacto, ubicacion,
             estado_id, municipio_id, parroquia_id, sector_id,
-            departamentos_id, cargos_id, profesion_id, estado
+            departamentos_id, cargos_id, profesion_id, estatus
         } = req.body;
 
         const oldPaciente = await pool.query('SELECT * FROM pacientes WHERE id = $1', [id]);
@@ -114,14 +119,14 @@ const updatePaciente = async (req, res, next) => {
                 cedula = $1, nombre = $2, apellido = $3, sexo = $4, fecha_nacimiento = $5, edad = $6,
                 correo = $7, contacto = $8, ubicacion = $9,
                 estado_id = $10, municipio_id = $11, parroquia_id = $12, sector_id = $13,
-                departamentos_id = $14, cargos_id = $15, profesion_id = $16, estado = $17
+                departamentos_id = $14, cargos_id = $15, profesion_id = $16, estatus = $17
             WHERE id = $18
             RETURNING *`,
             [
                 cedula, nombre, apellido, sexo, fecha_nacimiento, edad,
                 correo, contacto, ubicacion,
                 estado_id, municipio_id, parroquia_id, sector_id,
-                departamentos_id, cargos_id, profesion_id, estado, id
+                departamentos_id, cargos_id, profesion_id, estatus, id
             ]
         );
 
@@ -189,7 +194,7 @@ const getEstados = async (req, res, next) => {
 
 const getMunicipios = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT id, nombre FROM municipio ORDER BY nombre ASC');
+        const result = await pool.query('SELECT id, nombre, estado_id FROM municipio ORDER BY nombre ASC');
         return res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error al obtener todos los municipios', error);
@@ -199,7 +204,7 @@ const getMunicipios = async (req, res, next) => {
 
 const getParroquias = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT id, nombre FROM parroquia ORDER BY nombre ASC');
+        const result = await pool.query('SELECT id, nombre, municipio_id FROM parroquia ORDER BY nombre ASC');
         return res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error al obtener todos los municipios', error);
@@ -209,7 +214,7 @@ const getParroquias = async (req, res, next) => {
 
 const getSectores = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT id, nombre FROM sector ORDER BY nombre ASC');
+        const result = await pool.query('SELECT id, nombre, parroquia_id FROM sector ORDER BY nombre ASC');
         return res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error al obtener todos los municipios', error);
@@ -239,7 +244,7 @@ const getCargos = async (req, res, next) => {
 
 const getProfesiones = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT id, nombre FROM profesion ORDER BY nombre ASC');
+        const result = await pool.query('SELECT id, carrera FROM profesion ORDER BY carrera ASC');
         return res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error al obtener todas las profesiones', error);

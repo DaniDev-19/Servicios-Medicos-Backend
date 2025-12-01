@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const verificarToken = require('../helpers/verificarToken');
-const checkPermisos = require ('../helpers/checkPermisos');
+const checkPermisos = require('../helpers/checkPermisos');
 const { getAllEnfermedades, getEnfermedades, getCategoria_e, createEnfermedad, updateEnfermedad, deleteEnfermedad } = require('../controllers/enfermedades.controller');
 
 const router = Router();
@@ -11,10 +11,10 @@ router
 
 router
     .route('/All_categorias_e')
-    .get(verificarToken, checkPermisos('enfermedades', ' ver'), getCategoria_e);
+    .get(verificarToken, checkPermisos('enfermedades', 'ver'), getCategoria_e);
 
 router
-    .route('/Registrar')
+    .route('/registrar')
     .post(verificarToken, checkPermisos('enfermedades', 'crear'), createEnfermedad);
 
 router

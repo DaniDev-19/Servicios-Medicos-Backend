@@ -36,7 +36,7 @@ const verificarToken = async (req, res, next) => {
 
             if (sesion.rows.length === 0) {
                 console.log('Sesión no activa o token no encontrado en DB');
-                return res.status(404).json({ message: 'Sesión no activa o Token inválido' });
+                return res.status(401).json({ message: 'Sesión no activa o Token inválido' });
             }
         } catch (dbErr) {
             console.log('Error consultando la base de datos:', dbErr.message);

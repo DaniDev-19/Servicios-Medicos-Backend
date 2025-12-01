@@ -1,29 +1,41 @@
-const {Router} = require('express');
+const { Router } = require('express');
 const verificarToken = require('../helpers/verificarToken');
 const chekPermisos = require('../helpers/checkPermisos');
-const { getAllReposos, actualizarEstadosReposos, createReposo, getReposo, updateReposo, deleteReposo } = require('../controllers/reposos.controller');
+const {
+    getAllReposos,
+    actualizarEstadosReposos,
+    createReposo,
+    getReposo,
+    updateReposo,
+    deleteReposo,
+    getRepososByPaciente
+} = require('../controllers/reposos.controller');
+
+console.log("--> [DEBUG] createReposo es tipo:", typeof createReposo);
 
 const router = Router();
 
-router
-    .route('/')
-    .get(verificarToken, chekPermisos('reposos', 'ver'),getAllReposos)
-    .get(verificarToken, chekPermisos('reposos', 'ver'), actualizarEstadosReposos);
+console.log("--> Cargando rutas de REPOSOS");
 
-router
-    .route('/registrar')
-    .post(verificarToken, chekPermisos('reposos', 'crear'), createReposo);
+// Ruta de prueba
+router.get('/ping', (req, res) => {
+    console.log("Ping a reposos recibido");
+    res.send('pong');
+});
 
-router
-    .route('/ver/:id')
-    .get(verificarToken, chekPermisos('reposos', 'ver'), getReposo);
+// Rutas generales
+router.get('/', verificarToken, chekPermisos('reposos', 'ver'), getAllReposos);
+router.get('/actualizar-estados', verificarToken, chekPermisos('reposos', 'ver'), actualizarEstadosReposos);
 
-router
-    .route('/actualizar/:id')
-    .put(verificarToken, chekPermisos('reposos', 'editar'), updateReposo);
+// Registrar
+router.post('/registrar', verificarToken, chekPermisos('reposos', 'crear'), createReposo);
 
-router
-    .route('/eliminar/:id')
-    .delete(verificarToken, chekPermisos('reposos', 'eliminar'), deleteReposo);
-    
+// Operaciones por ID
+router.get('/ver/:id', verificarToken, chekPermisos('reposos', 'ver'), getReposo);
+router.put('/actualizar/:id', verificarToken, chekPermisos('reposos', 'editar'), updateReposo);
+router.delete('/eliminar/:id', verificarToken, chekPermisos('reposos', 'eliminar'), deleteReposo);
+
+// Operaciones por Paciente
+router.get('/paciente/:id', verificarToken, chekPermisos('reposos', 'ver'), getRepososByPaciente);
+
 module.exports = router;
