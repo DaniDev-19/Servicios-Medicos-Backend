@@ -2,8 +2,6 @@ const express = require('express');
 const morgan = require('morgan');
 // const path = require('path');
 const cors = require('cors');
-const http = require('http');
-const { Server } = require('socket.io');
 require('./cleanSesion');
 
 /////// INICIO RUTASS///////
@@ -31,6 +29,11 @@ const seguimientos = require('./routes/seguimientos.routes');
 const consultas = require('./routes/consulta.routes');
 const login = require('./routes/auth.routes');
 const recuperacion = require('./routes/recuperacion.routes');
+const atenciones = require('./routes/atenciones.routes');
+const citas = require('./routes/citas.routes');
+const dashboard = require('./routes/dashboard.routes');
+const notificaciones = require('./routes/notificaciones.routes');
+
 // ///////// FIN RUTAS ///////
 
 
@@ -61,41 +64,12 @@ app.use((req, res, next) => {
 
 ////////////////////////// 
 
-// -----Socket.io ------
-const server = http.createServer(app);
-const io = new Server(server, {
-    cors: {
-        origin: (origin, cb) => {
-            if (!origin) return cb(null, true);
-            if (allowed.includes(origin)) return cb(null, true);
-            return cb(new Error(`CORS WS no permitido: ${origin}`));
-        },
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH']
-    },
-    transports: ['websocket', 'polling'],
-    path: '/socket.io'
-});
-
-// ---Guardar el objeto io para usarlo en los controladores-----
-global.io = io;
-app.set('io', io);
-
-io.on('connection', (socket) => {
-    console.log('socket conectado:', socket.id);
-
-    socket.on('join', (usuarioId) => {
-        socket.join(`user:${usuarioId}`);
-    });
-
-    socket.on('disconnect', (reason) => {
-        console.warn('socket desconectado:', reason);
-    });
-
-    socket.on('error', (err) => {
-        console.error('socket error:', err?.message || err);
-    });
-});
+// -----Socket.io REMOVED ------
+// const server = http.createServer(app);
+// const io = new Server(server, { ... });
+// global.io = io;
+// app.set('io', io);
+// io.on('connection', ...);
 // -------------------////////////////////
 
 ///////////// USO DE RUTAS ////////////////
@@ -103,7 +77,7 @@ app.use('/recuperacion', recuperacion);
 app.use('/auth', login);
 app.use('/consultas', consultas);
 app.use('/seguimientos', seguimientos);
-app.use('/reposos', reposos); 
+app.use('/reposos', reposos);
 app.use('/signos_vitales', signos);
 app.use('/historias_medicas', historiasMedicas);
 app.use('/medicamentos', medicamentos);
@@ -123,6 +97,10 @@ app.use('/categoria_m', categoria_m);
 app.use('/estado', estado);
 app.use('/cargos', cargos);
 app.use('/profesion', profesion);
+app.use('/atenciones', atenciones);
+app.use('/citas', citas);
+app.use('/dashboard', dashboard);
+app.use('/notificaciones', notificaciones);
 // FIN DEL USO DE RUTAS ///////////////////
 
 // ----Manejador de Errores Globales/////////
@@ -144,7 +122,7 @@ app.use((err, req, res, next) => {
 /////////// LISTAR EN PUERTO DEL SERVIDOR PARA SU INICIO ////////////////
 
 const PORT = process.env.PORT || 4000;
-server.listen(PORT, () => {
-    console.log(`Servidor corriendo en el puerto: ${PORT} + socket.io`);
+app.listen(PORT, () => {
+    console.log(`Servidor corriendo en el puerto: ${PORT}`);
 });
 

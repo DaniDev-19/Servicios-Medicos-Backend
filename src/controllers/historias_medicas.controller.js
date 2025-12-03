@@ -1,11 +1,12 @@
 const pool = require('../config/db');
 const { registrarBitacora } = require('../helpers/registerBitacora');
-
+const { crearNotificacionInterna } = require('./notificaciones.controller');
 
 const getAllHistoriasM = async (req, res, next) => {
     try {
         const result = await pool.query(`
             SELECT 
+                hr.id,
                 TO_CHAR(hr.fecha_consulta, 'DD/MM/YY HH24:MI') AS fecha_consulta,
                 TO_CHAR(hr.fecha_alta, 'DD/MM/YY HH24:MI') AS fecha_alta,
                 hr.codigo AS codigo_historia,
@@ -142,6 +143,14 @@ const createHistoriaM = async (req, res, next) => {
         }
 
         try {
+            // Notificación de nueva historia médica
+            await crearNotificacionInterna(
+                req.user.id,
+                'Historia Médica Creada',
+                `Se ha creado la historia médica #${result.rows[0].codigo}`,
+                'success'
+            );
+
             await registrarBitacora({
                 accion: 'Registro',
                 tabla: 'Historias Médicas',
@@ -249,7 +258,7 @@ const deleteHistoriaM = async (req, res, next) => {
 
 const getPacientes = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT id, cedula, nombre, apellido FROM pacientes ORDER BY cedula ASC');
+        const result = await pool.query('SELECT id, cedula, nombre, apellido, contacto FROM pacientes ORDER BY cedula ASC');
         return res.status(200).json(result.rows);
     } catch (error) {
         console.error('Error al obtener todos los pacientes', error);

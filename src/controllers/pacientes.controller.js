@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { registrarBitacora } = require('../helpers/registerBitacora');
+const { crearNotificacionInterna } = require('./notificaciones.controller');
 
 const getAllPacientes = async (req, res, next) => {
     try {
@@ -73,6 +74,14 @@ const createPaciente = async (req, res, next) => {
                 estado_id, municipio_id, parroquia_id, sector_id,
                 departamentos_id, cargos_id, profesion_id, estatus
             ]
+        );
+
+        // Notificación de nuevo paciente
+        await crearNotificacionInterna(
+            req.user.id,
+            'Nuevo Paciente Registrado',
+            `Se ha registrado al paciente ${nombre} ${apellido} (C.I: ${cedula})`,
+            'success'
         );
 
         await registrarBitacora({

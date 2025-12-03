@@ -1,5 +1,6 @@
 const pool = require('../config/db');
 const { registrarBitacora } = require('../helpers/registerBitacora');
+const { crearNotificacionInterna } = require('./notificaciones.controller');
 
 const getAllConsultas = async (req, res, next) => {
     try {
@@ -7,7 +8,29 @@ const getAllConsultas = async (req, res, next) => {
             SELECT * FROM consultas ORDER BY fecha_atencion DESC
             `);
 
-        return res.status(200).json(result.rows);
+        // Para cada consulta, obtener sus medicamentos
+        const consultasConMedicamentos = await Promise.all(
+            result.rows.map(async (consulta) => {
+                const medicamentos = await pool.query(`
+                    SELECT 
+                        m.id AS medicamento_id,
+                        m.nombre AS medicamento_nombre,
+                        m.presentacion AS medicamento_presentacion,
+                        m.miligramos AS medicamentos_miligramos,
+                        cm.cantidad_utilizada AS cantidad_utilizada
+                    FROM consulta_medicamentos cm
+                    INNER JOIN medicamentos m ON cm.medicamento_id = m.id
+                    WHERE cm.consulta_id = $1
+                `, [consulta.id]);
+
+                return {
+                    ...consulta,
+                    medicamentos: medicamentos.rows
+                };
+            })
+        );
+
+        return res.status(200).json(consultasConMedicamentos);
     } catch (error) {
         console.error('Error al obtener todos los datos de las consultas', error);
         next(error);
@@ -61,14 +84,14 @@ const getConsultas = async (req, res, next) => {
 };
 
 const createConsultas = async (req, res, next) => {
-    const { diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, medicamentos_ids } = req.body;
+    const { diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, medicamentos_ids, citas_id } = req.body;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
 
-        const result = await client.query(`INSERT INTO consultas (diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus)
-            VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-            [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus]);
+        const result = await client.query(`INSERT INTO consultas (diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+            [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id]);
 
         const consultasId = result.rows[0].id;
 
@@ -78,6 +101,19 @@ const createConsultas = async (req, res, next) => {
                     [consultasId, medi.medicamento_id, medi.cantidad_utilizada]);
             };
         }
+
+        // Si hay una cita asociada, actualizar su estatus a 'realizada'
+        if (citas_id) {
+            await client.query("UPDATE citas SET estatus = 'realizada' WHERE id = $1", [citas_id]);
+        }
+
+        // Notificación de consulta realizada
+        await crearNotificacionInterna(
+            req.user.id,
+            'Consulta Realizada',
+            `Se ha registrado exitosamente la consulta #${consultasId}`,
+            'success'
+        );
 
         await registrarBitacora({
             accion: 'Registro',
@@ -101,15 +137,15 @@ const createConsultas = async (req, res, next) => {
 
 const updateConsulta = async (req, res, next) => {
     const { id } = req.params;
-    const { diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, medicamentos_ids } = req.body;
+    const { diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, medicamentos_ids, citas_id } = req.body;
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
         const oldConsultas = await client.query('SELECT * FROM consultas WHERE id = $1', [id]);
         const result = await client.query(`
-            UPDATE consultas SET diagnostico = $1, tratamientos = $2, observaciones = $3, pacientes_id = $4, enfermedades_id = $5, estatus = $6
-            WHERE id = $7 RETURNING *
-            `, [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, id]);
+            UPDATE consultas SET diagnostico = $1, tratamientos = $2, observaciones = $3, pacientes_id = $4, enfermedades_id = $5, estatus = $6, citas_id = $7
+            WHERE id = $8 RETURNING *
+            `, [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id, id]);
 
         await client.query('DELETE FROM consulta_medicamentos WHERE consulta_id = $1', [id]);
         if (Array.isArray(medicamentos_ids)) {
@@ -117,6 +153,11 @@ const updateConsulta = async (req, res, next) => {
                 await client.query(`INSERT INTO consulta_medicamentos (consulta_id, medicamento_id, cantidad_utilizada) VALUES ($1, $2, $3)`,
                     [id, medi.medicamento_id, medi.cantidad_utilizada]);
             };
+        }
+
+        // Si hay una cita asociada, actualizar su estatus a 'realizada'
+        if (citas_id) {
+            await client.query("UPDATE citas SET estatus = 'realizada' WHERE id = $1", [citas_id]);
         }
 
         await registrarBitacora({
@@ -222,7 +263,7 @@ const getConsultasByPacienteId = async (req, res, next) => {
 
         return res.status(200).json(result.rows);
     } catch (error) {
-        console.error(`Error al obtener consultas por paciente id: ${id}`, error);
+        console.error(`Error al obtener consultas del paciente ${id}`, error);
         next(error);
     }
 };
@@ -237,4 +278,4 @@ module.exports = {
     getMedicamentos,
     getPacientes,
     getConsultasByPacienteId
-}
+};

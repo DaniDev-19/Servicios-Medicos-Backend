@@ -1,9 +1,8 @@
 const pool = require('../config/db');
 const { registrarBitacora } = require('../helpers/registerBitacora');
-const { get } = require('../routes/cargo.routes');
 
 const getAllProfesion = async (req, res, next) => {
-    try{
+    try {
         const result = await pool.query('SELECT * FROM profesion ORDER BY id DESC');
         return res.json(result.rows);
     } catch (error) {
@@ -15,10 +14,10 @@ const getAllProfesion = async (req, res, next) => {
 const getProfesion = async (req, res, next) => {
     const { id } = req.params;
 
-    try{
+    try {
         const result = await pool.query('SELECT * FROM profesion WHERE id = $1', [id]);
-        
-        if(result.rows.length === 0){
+
+        if (result.rows.length === 0) {
             return res.status(404).json({
                 message: '--> Error <-- La Profesión no puede ser encontrada o no existe'
             });
@@ -32,11 +31,10 @@ const getProfesion = async (req, res, next) => {
 };
 
 const createProfesion = async (req, res, next) => {
-    const { id } = req.params;
-    try{
+    try {
         const { nombre, nivel } = req.body;
-        
-        const result = await pool.query('INSERT INTO profesion (nombre, nivel) VALUES ($1, $2) RETURNING *', 
+
+        const result = await pool.query('INSERT INTO profesion (carrera, nivel) VALUES ($1, $2) RETURNING *',
             [nombre, nivel]
         );
 
@@ -45,8 +43,8 @@ const createProfesion = async (req, res, next) => {
             tabla: 'Profesión',
             usuario: req.user.username,
             usuarios_id: req.user.id,
-            descripcion: `Se Creo la Profesión con nombre: ${nombre}`,
-            datos: {nuevos: result.rows[0]}
+            descripcion: `Se Creo la Profesión: ${nombre}`,
+            datos: { nuevos: result.rows[0] }
         });
 
         return res.status(201).json(result.rows[0]);
@@ -58,16 +56,16 @@ const createProfesion = async (req, res, next) => {
 
 const updateProfesion = async (req, res, next) => {
     const { id } = req.params;
-    
-    try{
+
+    try {
         const { nombre, nivel } = req.body;
 
         const oldProfesion = await pool.query('SELECT * FROM profesion WHERE id = $1 ', [id]);
-        
-        const result = await pool.query('UPDATE profesion SET nombre = $1, nivel = $2 WHERE id = $3', [nombre, nivel, id]);
 
-        if (result.rows.length === 0){
-            return res.json(404).json({
+        const result = await pool.query('UPDATE profesion SET carrera = $1, nivel = $2 WHERE id = $3 RETURNING *', [nombre, nivel, id]);
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({
                 message: '--> Error <-- Solicitud no Existe o imposible de encontrar'
             })
         };
@@ -76,8 +74,8 @@ const updateProfesion = async (req, res, next) => {
             accion: 'Actualizo',
             tabla: 'Profesión',
             usuario: req.user.username,
-            usuario_id: req.user.id,
-            descripcion: `Se Actualizo la Profesión con nombre: ${nombre}`,
+            usuarios_id: req.user.id,
+            descripcion: `Se Actualizo la Profesión: ${nombre}`,
             datos: { antiguos: oldProfesion.rows[0], nuevos: result.rows[0] }
         });
 
@@ -92,12 +90,12 @@ const updateProfesion = async (req, res, next) => {
 const deleteProfesion = async (req, res, next) => {
     const { id } = req.params;
 
-    try{
+    try {
         const oldProfesion = await pool.query('SELECT * FROM profesion WHERE id = $1', [id]);
-        
-        const result = await pool.query('DELETE * FROM profesion WHERE id = $1', [id]);
-        
-        if(result.rowCount === 0){
+
+        const result = await pool.query('DELETE FROM profesion WHERE id = $1', [id]);
+
+        if (result.rowCount === 0) {
             return res.status(404).json({
                 message: '--> Error <-- Solicitud no se encuentra o es inexistente'
             });
@@ -108,12 +106,12 @@ const deleteProfesion = async (req, res, next) => {
             tabla: 'Profesión',
             usuario: req.user.username,
             usuarios_id: req.user.id,
-            descripcion: `Se Elimino la profesión ${oldProfesion.rows[0]?.nombre || id }`,
-            datos: {antiguos: oldProfesion.rows[0]}
+            descripcion: `Se Elimino la profesión ${oldProfesion.rows[0]?.carrera || id}`,
+            datos: { antiguos: oldProfesion.rows[0] }
         });
 
         return res.sendStatus(204);
-    }catch(error){
+    } catch (error) {
         console.error(`-->Error al Eliminar la Profesion con id: ${id} <--`, error);
         next();
     }

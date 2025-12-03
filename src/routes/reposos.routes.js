@@ -23,19 +23,16 @@ router.get('/ping', (req, res) => {
     res.send('pong');
 });
 
-// Rutas generales
 router.get('/', verificarToken, chekPermisos('reposos', 'ver'), getAllReposos);
 router.get('/actualizar-estados', verificarToken, chekPermisos('reposos', 'ver'), actualizarEstadosReposos);
 
-// Registrar
 router.post('/registrar', verificarToken, chekPermisos('reposos', 'crear'), createReposo);
 
-// Operaciones por ID
+
 router.get('/ver/:id', verificarToken, chekPermisos('reposos', 'ver'), getReposo);
 router.put('/actualizar/:id', verificarToken, chekPermisos('reposos', 'editar'), updateReposo);
 router.delete('/eliminar/:id', verificarToken, chekPermisos('reposos', 'eliminar'), deleteReposo);
 
-// Operaciones por Paciente
 router.get('/paciente/:id', verificarToken, chekPermisos('reposos', 'ver'), getRepososByPaciente);
 
 module.exports = router;

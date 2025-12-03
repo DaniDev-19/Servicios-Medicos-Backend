@@ -1,9 +1,24 @@
 const pool = require('../config/db');
 const { registrarBitacora } = require('../helpers/registerBitacora');
+const { crearNotificacionInterna } = require('./notificaciones.controller');
 
 const getAllReposos = async (req, res, next) => {
     try {
-        const result = await pool.query('SELECT * FROM reposos ORDER BY id DESC');
+        const result = await pool.query(`
+            SELECT 
+                r.*,
+                p.cedula AS cedula_paciente,
+                p.apellido AS apellido_paciente,
+                p.nombre AS nombre_paciente,
+                dc.cedula AS cedula_doctor,
+                dc.apellido AS apellido_doctor,
+                dc.nombre AS nombre_doctor
+            FROM reposos r
+            INNER JOIN pacientes p ON r.pacientes_id = p.id
+            LEFT JOIN usuarios u ON r.usuarios_id = u.id
+            LEFT JOIN doctor dc ON u.doctor_id = dc.id
+            ORDER BY r.id DESC
+        `);
         return res.json(result.rows);
     } catch (error) {
         console.error('Error obteniendo todos los reposos', error);
@@ -46,6 +61,14 @@ const createReposo = async (req, res, next) => {
                 consulta_id, pacientes_id, usuarios_id
             ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
             [fecha_inicio, fecha_fin, hora_fin, diagnostico, observacion, consulta_id, pacientes_id, usuarios_id]
+        );
+
+        // Notificación de reposo emitido
+        await crearNotificacionInterna(
+            req.user.id,
+            'Reposo Emitido',
+            `Se ha emitido un reposo para el paciente ID: ${pacientes_id}`,
+            'warning'
         );
 
         await registrarBitacora({
@@ -149,12 +172,14 @@ const deleteReposo = async (req, res, next) => {
     }
 };
 
-const actualizarEstadosReposos = async () => {
+const actualizarEstadosReposos = async (req, res) => {
     try {
         await pool.query('SELECT actualizar_estado_reposos();');
         console.log('Estados de reposos actualizados correctamente');
+        if (res) return res.json({ message: 'Estados actualizados correctamente' });
     } catch (error) {
         console.error('Error actualizando estados de reposos', error);
+        if (res) return res.status(500).json({ message: 'Error actualizando estados' });
     }
 };
 
