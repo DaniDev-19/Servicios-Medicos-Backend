@@ -39,7 +39,7 @@ const notificaciones = require('./routes/notificaciones.routes');
 
 // --- Configuración de CORS ---
 const allowed = [
-    'http://localhost:5173', 'http://localhost:4000', 'https://servicios-medicos-puce.vercel.app',
+    'http://localhost:5173', 'http://localhost:4000', 'https://servicios-medicos-puce.vercel.app', 'https://servicios-medicos-xi.vercel.app/', 'https://servicios-medicos-xi.vercel.app'
 ];
 const corsOptions = {
     origin: allowed,
