@@ -16,8 +16,8 @@ const getAllHistoriasM = async (req, res, next) => {
                 dc.apellido AS apellido_doctor
             FROM historias_medicas hr
             INNER JOIN pacientes p ON hr.pacientes_id = p.id
-            INNER JOIN usuarios u ON hr.usuarios_id = u.id
-            INNER JOIN doctor dc ON u.doctor_id = dc.id 
+            LEFT JOIN usuarios u ON hr.usuarios_id = u.id
+            LEFT JOIN doctor dc ON u.doctor_id = dc.id 
             ORDER BY hr.fecha_consulta DESC
             `);
 
@@ -183,9 +183,9 @@ const updateHistoriaM = async (req, res, next) => {
     const client = await pool.connect();
     try {
         await client.query('BEGIN');
-        const oldHistoriaM = await pool.query('SELECT * FROM historias_medicas WHERE id = $1', [id]);
+        const oldHistoriaM = await client.query('SELECT * FROM historias_medicas WHERE id = $1', [id]);
 
-        const result = await pool.query(`
+        const result = await client.query(`
             UPDATE historias_medicas SET fecha_consulta = $1, fecha_alta = $2, motivo_consulta = $3, historia = $4, examen_fisico = $5, diagnostico = $6, observacion = $7, pacientes_id = $8, usuarios_id = $9, estado = $10
             WHERE id = $11 RETURNING *
             `, [fecha_consulta, fecha_alta, motivo_consulta, historia, examen_fisico, diagnostico, observacion, pacientes_id, usuarios_id, estado, id]);
@@ -227,8 +227,8 @@ const deleteHistoriaM = async (req, res, next) => {
     try {
         await client.query('BEGIN');
         await client.query('DELETE FROM historia_enfermedades WHERE historia_id = $1', [id]);
-        const oldHistoriaM = await pool.query('SELECT * FROM historias_medicas WHERE id = $1', [id]);
-        const result = await pool.query('DELETE FROM historias_medicas WHERE id = $1', [id]);
+        const oldHistoriaM = await client.query('SELECT * FROM historias_medicas WHERE id = $1', [id]);
+        const result = await client.query('DELETE FROM historias_medicas WHERE id = $1', [id]);
 
         if (result.rowCount === 0) {
             return res.status(404).json({

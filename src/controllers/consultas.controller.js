@@ -89,6 +89,32 @@ const createConsultas = async (req, res, next) => {
     try {
         await client.query('BEGIN');
 
+        // --- VALIDACIÓN DE STOCK ANTES DE REGISTRAR ---
+        if (Array.isArray(medicamentos_ids)) {
+            for (const medi of medicamentos_ids) {
+                // Verificar existencia y cantidad disponible
+                const stockRes = await client.query(
+                    'SELECT nombre, cantidad_disponible FROM medicamentos WHERE id = $1',
+                    [medi.medicamento_id]
+                );
+
+                if (stockRes.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ message: `El medicamento seleccionado con ID ${medi.medicamento_id} no existe.` });
+                }
+
+                const medEnStock = stockRes.rows[0];
+                const cantidadSolicitada = parseInt(medi.cantidad_utilizada);
+
+                if (medEnStock.cantidad_disponible < cantidadSolicitada) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        message: `Stock insuficiente para "${medEnStock.nombre}". Disponible: ${medEnStock.cantidad_disponible}, Solicitado: ${cantidadSolicitada}. Verifique el inventario.`
+                    });
+                }
+            }
+        }
+
         const result = await client.query(`INSERT INTO consultas (diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id)
             VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
             [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id]);
@@ -148,7 +174,32 @@ const updateConsulta = async (req, res, next) => {
             `, [diagnostico, tratamientos, observaciones, pacientes_id, enfermedades_id, estatus, citas_id, id]);
 
         await client.query('DELETE FROM consulta_medicamentos WHERE consulta_id = $1', [id]);
+
+        // --- VALIDACIÓN DE STOCK AL ACTUALIZAR ---
+        // Se valida DESPUÉS del delete para contar con el stock devuelto por el trigger
         if (Array.isArray(medicamentos_ids)) {
+            for (const medi of medicamentos_ids) {
+                const stockRes = await client.query(
+                    'SELECT nombre, cantidad_disponible FROM medicamentos WHERE id = $1',
+                    [medi.medicamento_id]
+                );
+
+                if (stockRes.rows.length === 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(404).json({ message: `El medicamento ID ${medi.medicamento_id} no existe, actualización parada.` });
+                }
+
+                const medEnStock = stockRes.rows[0];
+                const cantidadSolicitada = parseInt(medi.cantidad_utilizada);
+
+                if (medEnStock.cantidad_disponible < cantidadSolicitada) {
+                    await client.query('ROLLBACK');
+                    return res.status(400).json({
+                        message: `Stock insuficiente para "${medEnStock.nombre}". Disponible: ${medEnStock.cantidad_disponible} (incluyendo devolución previa), Solicitado: ${cantidadSolicitada}.`
+                    });
+                }
+            }
+
             for (const medi of medicamentos_ids) {
                 await client.query(`INSERT INTO consulta_medicamentos (consulta_id, medicamento_id, cantidad_utilizada) VALUES ($1, $2, $3)`,
                     [id, medi.medicamento_id, medi.cantidad_utilizada]);

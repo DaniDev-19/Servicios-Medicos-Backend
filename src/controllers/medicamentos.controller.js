@@ -120,43 +120,69 @@ const createMedicamento = async (req, res, next) => {
 
 const updateMedicamento = async (req, res, next) => {
     const { id } = req.params;
-    const { nombre, presentacion, miligramos, cantidad_disponible, estatus, estado, categoria_m_id, movimientos } = req.body;
+    // Extraemos cantidad_disponible para manejarla aparte
+    const { nombre, presentacion, miligramos, cantidad_disponible, estatus, estado, categoria_m_id } = req.body;
     const client = await pool.connect();
 
     try {
         await client.query('BEGIN');
 
-        const oldMedicamento = await client.query('SELECT * FROM medicamentos WHERE id = $1', [id]);
+        // 1. Obtener datos actuales
+        const oldMedicamentoRes = await client.query('SELECT * FROM medicamentos WHERE id = $1', [id]);
+        if (oldMedicamentoRes.rows.length === 0) {
+            await client.query('ROLLBACK');
+            return res.status(404).json({ message: 'Medicamento no encontrado' });
+        }
+        const oldMedicamento = oldMedicamentoRes.rows[0];
+        const oldCantidad = oldMedicamento.cantidad_disponible;
+        const newCantidad = parseInt(cantidad_disponible);
 
+        // 2. Actualizar datos básicos (SIN actualizar cantidad_disponible directamente en el SET si usamos trigger, 
+        // pero como el trigger suma/resta, aquí solo actualizamos campos descriptivos. 
+        // La cantidad se ajustará via movimientos).
+
+        // Sin embargo, si queremos soportar la edición directa del número en el form:
+        // Calculamos la diferencia
+        const diferencia = newCantidad - oldCantidad;
+
+        // Actualizamos campos descriptivos
         const result = await client.query(`
             UPDATE medicamentos SET nombre = $1, presentacion = $2, miligramos = $3,
-            cantidad_disponible = $4, estatus = $5, estado = $6, categoria_m_id = $7,
+            estado = $4, categoria_m_id = $5,
             fecha_ultima_actualizacion = NOW()
-            WHERE id = $8 RETURNING *
-        `, [nombre, presentacion, miligramos, cantidad_disponible, estatus, estado, categoria_m_id, id]);
+            WHERE id = $6 RETURNING *
+        `, [nombre, presentacion, miligramos, estado, categoria_m_id, id]);
 
-        await client.query('DELETE FROM movimientos_medicamentos WHERE medicamento_id = $1', [id]);
+        // 3. Manejo inteligente del inventario (NO BORRAR HISTORIAL)
+        if (diferencia !== 0) {
+            const tipo = diferencia > 0 ? 'entrada' : 'salida';
+            const cantAbs = Math.abs(diferencia);
 
-        if (Array.isArray(movimientos)) {
-            for (const mov of movimientos) {
-                await client.query(`
-                    INSERT INTO movimientos_medicamentos (medicamento_id, tipo_movimiento, cantidad, usuario_id, motivo)
-                    VALUES ($1, $2, $3, $4, $5)
-                `, [id, mov.tipo_movimiento, mov.cantidad, req.user.id, mov.motivo]);
-            }
+            // Insertar movimiento de ajuste
+            await client.query(`
+                INSERT INTO movimientos_medicamentos (medicamento_id, tipo_movimiento, cantidad, usuario_id, motivo)
+                VALUES ($1, $2, $3, $4, $5)
+            `, [id, tipo, cantAbs, req.user.id, 'Ajuste manual de inventario en Edición']);
+
+            // El trigger 'trg_actualizar_cantidad_medicamento' se encargará de actualizar 'cantidad_disponible' 
+            // y 'estatus' en la tabla medicamentos automáticamente.
         }
+        // Si la diferencia es 0, no tocamos la cantidad ni el historial
+
+        // Recuperamos el registro actualizado final (post-trigger)
+        const finalMedicamento = await client.query('SELECT * FROM medicamentos WHERE id = $1', [id]);
 
         await registrarBitacora({
             accion: 'Actualizar',
             tabla: 'Medicamentos',
             usuario: req.user.username,
             usuarios_id: req.user.id,
-            descripcion: `Se actualizó el medicamento: ${nombre}`,
-            datos: { antiguos: oldMedicamento.rows[0], nuevos: result.rows[0] }
+            descripcion: `Se actualizó el medicamento: ${nombre} (Ajuste stock: ${diferencia})`,
+            datos: { antiguos: oldMedicamento, nuevos: finalMedicamento.rows[0] }
         });
 
         await client.query('COMMIT');
-        return res.json(result.rows[0]);
+        return res.json(finalMedicamento.rows[0]);
     } catch (error) {
         await client.query('ROLLBACK');
         console.error(`Error al actualizar medicamento con id: ${id}`, error);
@@ -200,12 +226,120 @@ const deleteMedicamento = async (req, res, next) => {
 };
 
 const getCategoriaM = async (req, res, next) => {
-    try{
+    try {
         const result = await pool.query('SELECT id, nombre FROM categoria_m ORDER BY nombre DESC');
         return res.status(200).json(result.rows);
-    }catch(error){
-        console.error('Error al obtener todas las categorias' ,error);
+    } catch (error) {
+        console.error('Error al obtener todas las categorias', error);
         next();
+    }
+};
+
+const getAllMovimientos = async (req, res, next) => {
+    try {
+        // Query complejo para intentar extraer el ID de consulta del texto 'motivo' y buscar su código
+        // Asumiendo que el motivo tiene formato "Uso en consulta ID: <numero>"
+        const result = await pool.query(`
+            SELECT 
+                mm.id, 
+                mm.tipo_movimiento, 
+                mm.cantidad, 
+                mm.fecha, 
+                mm.motivo,
+                m.nombre AS medicamento, 
+                u.username AS usuario,
+                -- Intentar extraer ID de consulta si el motivo coincide con el patrón
+                CASE 
+                    WHEN mm.motivo ~ 'ID: [0-9]+' THEN 
+                        SUBSTRING(mm.motivo FROM 'ID: ([0-9]+)')::INT 
+                    ELSE NULL 
+                END AS extracted_consulta_id
+            FROM movimientos_medicamentos mm
+            JOIN medicamentos m ON mm.medicamento_id = m.id
+            LEFT JOIN usuarios u ON mm.usuario_id = u.id
+            ORDER BY mm.fecha DESC
+        `);
+
+        // Procesar resultados para reemplazar ID con Código si es posible
+        const movimientos = result.rows;
+
+        // Recolectar IDs de consultas a buscar
+        const consultaIds = movimientos
+            .map(m => m.extracted_consulta_id)
+            .filter(id => id); // Filtrar nulos
+
+        let consultaMap = {};
+        if (consultaIds.length > 0) {
+            const consultasRes = await pool.query(`
+                SELECT id, codigo FROM consultas WHERE id = ANY($1::int[])
+            `, [consultaIds]);
+
+            consultaMap = consultasRes.rows.reduce((acc, curr) => {
+                acc[curr.id] = curr.codigo;
+                return acc;
+            }, {});
+        }
+
+        // Formatear respuesta
+        const formatted = movimientos.map(mov => {
+            let motivoFinal = mov.motivo;
+            if (mov.extracted_consulta_id && consultaMap[mov.extracted_consulta_id]) {
+                const codigo = consultaMap[mov.extracted_consulta_id];
+                // Si es un uso en consulta
+                if (mov.motivo.includes('Uso en consulta ID:')) {
+                    motivoFinal = `Uso en consulta: ${codigo}`;
+                }
+                // Si es una devolución automática (eliminación/edición)
+                else if (mov.motivo.toLowerCase().includes('devolución')) {
+                    motivoFinal = `Devolución (Consulta: ${codigo})`;
+                }
+                // Fallback genérico: reemplazo directo del ID si no calza con los anteriores pero tiene el ID
+                else {
+                    motivoFinal = mov.motivo.replace(`ID: ${mov.extracted_consulta_id}`, `Código: ${codigo}`);
+                }
+            }
+
+            return {
+                id: mov.id,
+                tipo_movimiento: String(mov.tipo_movimiento), // Asegurar string
+                cantidad: mov.cantidad,
+                fecha: mov.fecha,
+                motivo: motivoFinal,
+                medicamento: mov.medicamento,
+                usuario: mov.usuario ? String(mov.usuario) : null // Asegurar string o null
+            };
+        });
+
+        return res.json(formatted);
+    } catch (error) {
+        console.error('Error al obtener todos los movimientos:', error);
+        next(error);
+    }
+};
+
+const getMedicamentosByPaciente = async (req, res, next) => {
+    const { id } = req.params;
+    try {
+        const result = await pool.query(`
+            SELECT 
+                m.nombre AS medicamento,
+                m.presentacion,
+                cm.cantidad_utilizada AS cantidad,
+                c.fecha_atencion AS fecha,
+                c.codigo AS consulta_codigo,
+                e.nombre AS enfermedad
+            FROM consultas c
+            JOIN consulta_medicamentos cm ON c.id = cm.consulta_id
+            JOIN medicamentos m ON cm.medicamento_id = m.id
+            LEFT JOIN enfermedades e ON c.enfermedades_id = e.id
+            WHERE c.pacientes_id = $1
+            ORDER BY c.fecha_atencion DESC
+        `, [id]);
+
+        return res.json(result.rows);
+    } catch (error) {
+        console.error(`Error al obtener medicamentos del paciente ${id}`, error);
+        next(error);
     }
 };
 
@@ -215,5 +349,7 @@ module.exports = {
     createMedicamento,
     updateMedicamento,
     deleteMedicamento,
-    getCategoriaM
+    getCategoriaM,
+    getAllMovimientos,
+    getMedicamentosByPaciente
 };
