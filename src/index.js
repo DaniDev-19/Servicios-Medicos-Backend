@@ -33,6 +33,8 @@ const atenciones = require('./routes/atenciones.routes');
 const citas = require('./routes/citas.routes');
 const dashboard = require('./routes/dashboard.routes');
 const notificaciones = require('./routes/notificaciones.routes');
+const valoracion = require('./routes/valoracion.routes');
+const reportes = require('./routes/reportes.routes');
 
 // ///////// FIN RUTAS ///////
 
@@ -101,6 +103,8 @@ app.use('/atenciones', atenciones);
 app.use('/citas', citas);
 app.use('/dashboard', dashboard);
 app.use('/notificaciones', notificaciones);
+app.use('/valoracion', valoracion);
+app.use('/reportes', reportes);
 // FIN DEL USO DE RUTAS ///////////////////
 
 // ----Manejador de Errores Globales/////////

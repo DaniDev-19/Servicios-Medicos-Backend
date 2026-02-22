@@ -1,6 +1,6 @@
 const { Router } = require('express');
 const verificarToken = require('../helpers/verificarToken');
-const { loginUsuario, logoutUsuario, getNotificacionesPendientes } = require('../controllers/login.controller');
+const { loginUsuario, logoutUsuario, getNotificacionesPendientes, latidoUsuario } = require('../controllers/login.controller');
 
 const router = Router();
 
@@ -15,10 +15,14 @@ router
 router
     .route('/perfil')
     .get(verificarToken, (req, res) => {
-        res.json({message: 'Acceso Permitido', user: req.user });
+        res.json({ message: 'Acceso Permitido', user: req.user });
     });
 
 router
     .route('/pendientes', verificarToken, getNotificacionesPendientes);
+
+router
+    .route('/latido')
+    .post(verificarToken, latidoUsuario);
 
 module.exports = router;

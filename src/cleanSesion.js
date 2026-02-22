@@ -26,23 +26,26 @@ const notifyForcedLogout = (sessions) => {
   );
 };
 
-// Corre cada 5 minutos (ajusta si lo necesitas)
-cron.schedule('*/50 * * * *', async () => {
+// Corre cada 1 minuto para mayor precisión
+cron.schedule('*/1 * * * *', async () => {
   const started = Date.now();
   try {
-    // Marca como inactivas las sesiones vencidas y devuelve las afectadas
+    // Marca como inactivas las sesiones que no han tenido actividad en 4 minutos
+    // O aquellas que tienen una fecha_fin pasada
     const { rows: expired } = await pool.query(`
       UPDATE public.sesiones
-      SET activo = false
+      SET activo = false, fecha_fin = NOW()
       WHERE activo = true
-        AND fecha_fin IS NOT NULL
-        AND fecha_fin < NOW()
+        AND (
+          (fecha_fin IS NOT NULL AND fecha_fin < NOW()) OR
+          (ultima_actividad < NOW() - INTERVAL '4 minutes')
+        )
       RETURNING id, usuario_id
     `);
 
     if (expired.length > 0) {
       console.log(`[${new Date().toISOString()}] Sesiones expiradas: ${expired.length}`);
-      // Notificar a clientes solo si es posible (no en Render)
+      // Notificar a clientes solo si es posible 
       notifyForcedLogout(expired);
     }
   } catch (err) {

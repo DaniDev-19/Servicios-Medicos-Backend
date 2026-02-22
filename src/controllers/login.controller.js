@@ -1,10 +1,10 @@
 const pool = require('../config/db');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt'); 
-const {crearSesion, cerrarSesion, tienesSesionActivo} = require('./sesion.controller');
+const bcrypt = require('bcrypt');
+const { crearSesion, cerrarSesion, tienesSesionActivo, actualizarLatido } = require('./sesion.controller');
 
 const loginUsuario = async (req, res, next) => {
-    const {username, password} = req.body;
+    const { username, password } = req.body;
     const ip = req.ip;
     const user_agent = req.headers['user-agent'];
 
@@ -18,37 +18,37 @@ const loginUsuario = async (req, res, next) => {
             WHERE (u.username = $1 OR u.correo = $2) AND estado = TRUE
             `, [username, username]);
 
-            if(result.rows.length === 0){
-                return res.status(401).json({
-                    message: ' Usuario no Existe'
-                });
-            }
+        if (result.rows.length === 0) {
+            return res.status(401).json({
+                message: ' Usuario no Existe'
+            });
+        }
 
-            const user = result.rows[0];
-            const isMatch = await bcrypt.compare(password, user.password);
+        const user = result.rows[0];
+        const isMatch = await bcrypt.compare(password, user.password);
 
-            if(!isMatch){
-                return res.status(401).json({
-                    message: 'usuario o contraseña incorrecto'
-                });
-            }
+        if (!isMatch) {
+            return res.status(401).json({
+                message: 'usuario o contraseña incorrecto'
+            });
+        }
 
-            const sesionActiva = await tienesSesionActivo(user.id);
-            if(sesionActiva){
-                return res.status(403).json({
-                    message: 'El Usuario ya Tiene una Sesion Activa en Otro Dispositivo'
-                });
-            }
+        const sesionActiva = await tienesSesionActivo(user.id);
+        if (sesionActiva) {
+            return res.status(403).json({
+                message: 'El Usuario ya Tiene una Sesion Activa en Otro Dispositivo'
+            });
+        }
 
-            const token = jwt.sign(
+        const token = jwt.sign(
             {
                 id: user.id,
                 username: user.username,
                 roles_id: user.roles_id,
                 permisos: user.permisos
             },
-          process.env.JWT_SECRET || 'secret',
-          {expiresIn: '3h'}
+            process.env.JWT_SECRET || 'secret',
+            { expiresIn: '3h' }
         );
 
         await crearSesion(user.id, token, ip, user_agent);
@@ -62,7 +62,7 @@ const loginUsuario = async (req, res, next) => {
                 roles_id: user.roles_id,
                 roles_nombre: user.roles_nombre,
                 permisos: user.permisos
-            
+
             }
         });
     } catch (error) {
@@ -77,31 +77,45 @@ const loginUsuario = async (req, res, next) => {
 const logoutUsuario = async (req, res, next) => {
     try {
         const token = req.headers.authorization?.split(' ')[1];
-        if(token){
+        if (token) {
             await cerrarSesion(token);
         }
 
-        return res.status(200).json({message: ' Sesión cerrada exitosamente'})
+        return res.status(200).json({ message: ' Sesión cerrada exitosamente' })
     } catch (error) {
-        res.status(500).json({message: 'error cerrando sesión', error: error.message});
+        res.status(500).json({ message: 'error cerrando sesión', error: error.message });
     }
 };
 
 async function getNotificacionesPendientes(req, res, next) {
-    try{
-        const  usuario_id = req.query.usuario_id;
-        if(!usuario_id){
-            return res.status(400).json({error: 'usuario_id es requerido'});
+    try {
+        const usuario_id = req.query.usuario_id;
+        if (!usuario_id) {
+            return res.status(400).json({ error: 'usuario_id es requerido' });
         }
 
         const result = await pool.query(`SELECT * FROM notificaciones WHERE usuario_id = $1 AND leida = FALSE ORDER BY created_at DESC `, [usuario_id]);
 
         res.json(result.rows);
-        
-    }catch(error){
+
+    } catch (error) {
         console.error(error);
         next(error);
     }
 };
 
-module.exports = {loginUsuario, logoutUsuario, getNotificacionesPendientes} ;
+const latidoUsuario = async (req, res) => {
+    try {
+        const token = req.headers.authorization?.split(' ')[1];
+        if (token) {
+            await actualizarLatido(token);
+            return res.status(200).json({ status: 'ok' });
+        }
+        res.status(401).json({ message: 'Token no proporcionado' });
+    } catch (error) {
+        console.error('Error en latido:', error);
+        res.status(500).json({ message: 'Error interno' });
+    }
+};
+
+module.exports = { loginUsuario, logoutUsuario, getNotificacionesPendientes, latidoUsuario };

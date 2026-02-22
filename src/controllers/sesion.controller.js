@@ -17,8 +17,13 @@ const tienesSesionActivo = async (usuario_id) => {
     return result.rows.length > 0;
 };
 
+const actualizarLatido = async (token) => {
+    await pool.query('UPDATE sesiones SET ultima_actividad = NOW() WHERE token = $1 AND activo = TRUE', [token]);
+};
+
 module.exports = {
     crearSesion,
     cerrarSesion,
-    tienesSesionActivo
+    tienesSesionActivo,
+    actualizarLatido
 }

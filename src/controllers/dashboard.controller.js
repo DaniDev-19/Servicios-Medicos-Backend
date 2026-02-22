@@ -2,23 +2,23 @@ const pool = require('../config/db');
 
 const getDashboardStats = async (req, res, next) => {
     try {
-        
+
         const pacientesResult = await pool.query('SELECT COUNT(*) as total FROM pacientes');
         const totalPacientes = parseInt(pacientesResult.rows[0].total);
 
-       
+
         const historiasResult = await pool.query('SELECT COUNT(*) as total FROM historias_medicas WHERE estado = true');
         const totalHistorias = parseInt(historiasResult.rows[0].total);
 
-        
+
         const consultasResult = await pool.query("SELECT COUNT(*) as total FROM consultas WHERE estatus = 'Realizada'");
         const totalConsultas = parseInt(consultasResult.rows[0].total);
 
-        
+
         const medicamentosResult = await pool.query('SELECT COUNT(*) as total FROM medicamentos WHERE estado = true');
         const totalMedicamentos = parseInt(medicamentosResult.rows[0].total);
 
-       
+
         const consultasHoyResult = await pool.query(`
             SELECT COUNT(*) as total 
             FROM consultas 
@@ -26,7 +26,7 @@ const getDashboardStats = async (req, res, next) => {
         `);
         const consultasHoy = parseInt(consultasHoyResult.rows[0].total);
 
-    
+
         const consultasSemanaResult = await pool.query(`
             SELECT 
                 TO_CHAR(fecha_atencion, 'Day') as dia,
@@ -39,7 +39,7 @@ const getDashboardStats = async (req, res, next) => {
         `);
         const consultasPorSemana = consultasSemanaResult.rows;
 
-       
+
         const consultasMesResult = await pool.query(`
             SELECT COUNT(*) as total 
             FROM consultas 
@@ -48,7 +48,7 @@ const getDashboardStats = async (req, res, next) => {
         `);
         const consultasMes = parseInt(consultasMesResult.rows[0].total);
 
-        
+
         const actividadResult = await pool.query(`
             SELECT 
                 b.accion,
@@ -58,14 +58,17 @@ const getDashboardStats = async (req, res, next) => {
                 b.usuario
             FROM bitacora b
             ORDER BY b.fecha DESC
-            LIMIT 10
+            LIMIT 5
         `);
         const actividadReciente = actividadResult.rows;
 
-        
+        const totalActividadesResult = await pool.query('SELECT COUNT(*) as total FROM bitacora');
+        const totalActividades = parseInt(totalActividadesResult.rows[0].total);
+
+
         let proximasCitas = [];
         try {
-           
+
             const citasResult = await pool.query(`
                 SELECT 
                     c.id,
@@ -87,7 +90,7 @@ const getDashboardStats = async (req, res, next) => {
             console.log('Tabla citas no disponible o error en consulta:', error.message);
         }
 
-       
+
         const enfermedadesResult = await pool.query(`
             SELECT 
                 e.nombre as enfermedad,
@@ -101,7 +104,7 @@ const getDashboardStats = async (req, res, next) => {
         `);
         const enfermedadesComunes = enfermedadesResult.rows;
 
-       
+
         const medicamentosBajoStockResult = await pool.query(`
             SELECT 
                 nombre,
@@ -114,7 +117,7 @@ const getDashboardStats = async (req, res, next) => {
         `);
         const medicamentosBajoStock = medicamentosBajoStockResult.rows;
 
-        
+
         const departamentosResult = await pool.query(`
             SELECT 
                 d.nombre as departamento,
@@ -139,6 +142,7 @@ const getDashboardStats = async (req, res, next) => {
             },
             consultasPorSemana,
             actividadReciente,
+            totalActividades,
             proximasCitas,
             enfermedadesComunes,
             medicamentosBajoStock,
@@ -150,6 +154,39 @@ const getDashboardStats = async (req, res, next) => {
     }
 };
 
+const getPaginatedActivity = async (req, res, next) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const offset = (page - 1) * limit;
+
+        const actividadResult = await pool.query(`
+            SELECT 
+                b.accion,
+                b.tabla,
+                b.descripcion,
+                b.fecha,
+                b.usuario
+            FROM bitacora b
+            ORDER BY b.fecha DESC
+            LIMIT $1 OFFSET $2
+        `, [limit, offset]);
+
+        const totalResult = await pool.query('SELECT COUNT(*) as total FROM bitacora');
+
+        return res.json({
+            actividades: actividadResult.rows,
+            totalActividades: parseInt(totalResult.rows[0].total),
+            page,
+            limit
+        });
+    } catch (error) {
+        console.error('Error al obtener actividad paginada:', error);
+        next(error);
+    }
+};
+
 module.exports = {
-    getDashboardStats
+    getDashboardStats,
+    getPaginatedActivity
 };

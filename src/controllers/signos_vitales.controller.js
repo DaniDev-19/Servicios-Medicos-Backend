@@ -36,7 +36,7 @@ const createSignos = async (req, res, next) => {
         console.log('createSignos - Body recibido:', req.body);
         console.log('createSignos - Usuario:', req.user);
 
-        const { tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, consulta_id } = req.body;
+        const { tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, altura, consulta_id } = req.body;
 
         // Validación de consulta_id
         if (!consulta_id) {
@@ -46,9 +46,9 @@ const createSignos = async (req, res, next) => {
         }
 
         const result = await pool.query(`
-            INSERT INTO signos_vitales (tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, consulta_id)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *
-            `, [tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, consulta_id]);
+            INSERT INTO signos_vitales (tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, altura, consulta_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *
+            `, [tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, altura, consulta_id]);
 
         try {
             await registrarBitacora({
@@ -76,13 +76,13 @@ const createSignos = async (req, res, next) => {
 
 const updateSignos = async (req, res, next) => {
     const { id } = req.params;
-    const { tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, consulta_id } = req.body;
+    const { tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, altura, consulta_id } = req.body;
     try {
         const oldSignos = await pool.query('SELECT * FROM signos_vitales WHERE id = $1', [id]);
         const result = await pool.query(`
-            UPDATE signos_vitales SET tipo_sangre = $1, presion_arterial = $2, frecuencia_cardiaca = $3, frecuencia_respiratoria = $4, temperatura = $5, saturacion_oxigeno = $6, peso = $7, talla = $8, consulta_id = $9
-            WHERE id = $10 RETURNING *
-            `, [tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, consulta_id, id]);
+            UPDATE signos_vitales SET tipo_sangre = $1, presion_arterial = $2, frecuencia_cardiaca = $3, frecuencia_respiratoria = $4, temperatura = $5, saturacion_oxigeno = $6, peso = $7, talla = $8, altura = $9, consulta_id = $10
+            WHERE id = $11 RETURNING *
+            `, [tipo_sangre, presion_arterial, frecuencia_cardiaca, frecuencia_respiratoria, temperatura, saturacion_oxigeno, peso, talla, altura, consulta_id, id]);
 
         try {
             await registrarBitacora({
