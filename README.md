@@ -17,7 +17,7 @@ Este es el servidor del Sistema de Gestión Integral de Servicios Médicos del P
 
 1. **Clonar el repositorio**:
    ```bash
-   git clone <url-del-repositorio>
+   git clone https://github.com/DaniDev-19/Servicios-Medicos.git
    cd Backend
    ```
 
